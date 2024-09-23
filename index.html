@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investment Strategy Model with Bank Earnings</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 250px;
+        }
+        input {
+            width: 200px;
+            padding: 5px;
+        }
+        button {
+            display: block;
+            margin: 20px 0;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #results, #bankEarnings {
+            margin-top: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: right;
+        }
+        th {
+            background-color: #f2f2f2;
+            text-align: center;
+        }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Investment Strategy Model with Bank Earnings</h1>
+    
+    <div class="input-group">
+        <label for="initialCorpus">Initial Corpus (₹):</label>
+        <input type="number" id="initialCorpus" value="30000000">
+    </div>
+    <div class="input-group">
+        <label for="annualInvestmentReturn">Annual Investment Return (%):</label>
+        <input type="number" id="annualInvestmentReturn" value="8" step="0.1">
+    </div>
+    <div class="input-group">
+        <label for="annualBankInterest">Annual Bank Interest (%):</label>
+        <input type="number" id="annualBankInterest" value="3.5" step="0.1">
+    </div>
+    <div class="input-group">
+        <label for="monthlyWithdrawal">Initial Monthly Withdrawal (₹):</label>
+        <input type="number" id="monthlyWithdrawal" value="75000">
+    </div>
+    <div class="input-group">
+        <label for="years">Projection Years:</label>
+        <input type="number" id="years" value="100">
+    </div>
+    <div class="input-group">
+        <label for="annualInflation">Annual Inflation (%):</label>
+        <input type="number" id="annualInflation" value="4" step="0.1">
+    </div>
+
+    <button onclick="calculateAndDisplay()">Calculate</button>
+
+    <div id="results"></div>
+    <div id="bankEarnings"></div>
+    <div class="chart-container">
+        <canvas id="corpusChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="bankEarningsChart"></canvas>
+    </div>
+
+    <script>
+        function calculateProjection(initialCorpus, annualInvestmentReturn, annualBankInterest, monthlyWithdrawal, years, annualInflation) {
+            let corpus = initialCorpus;
+            const data = [];
+            let lastingYears = years;
+            let totalBankInterest = 0;
+            let cumulativeBankInterest = 0;
+
+            for (let year = 0; year <= years; year++) {
+                const inflationAdjustedMonthlyWithdrawal = monthlyWithdrawal * Math.pow(1 + annualInflation, year);
+                const annualWithdrawal = inflationAdjustedMonthlyWithdrawal * 12;
+                
+                const investmentReturn = corpus * annualInvestmentReturn;
+                const bankInterest = corpus * annualBankInterest;
+                totalBankInterest += bankInterest;
+                cumulativeBankInterest += bankInterest;
+                const totalReturn = investmentReturn + bankInterest;
+                
+                corpus = corpus + totalReturn - annualWithdrawal;
+
+                data.push({
+                    year,
+                    corpus: Math.max(corpus, 0),
+                    monthlyWithdrawal: inflationAdjustedMonthlyWithdrawal,
+                    annualWithdrawal: annualWithdrawal,
+                    investmentReturn: investmentReturn,
+                    bankInterest: bankInterest,
+                    totalReturn: totalReturn,
+                    cumulativeBankInterest: cumulativeBankInterest
+                });
+                
+                if (corpus <= 0) {
+                    lastingYears = year;
+                    break;
+                }
+            }
+
+            return { data, lastingYears, totalBankInterest };
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
+        }
+
+        function drawChart(canvasId, data, config) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            ctx.clearRect(0, 0, width, height);
+
+            const maxValue = Math.max(...config.datasets.map(dataset => 
+                Math.max(...data.map(d => d[dataset.dataKey]))
+            ));
+
+            // Draw axes
+            ctx.beginPath();
+            ctx.moveTo(50, 50);
+            ctx.lineTo(50, height - 50);
+            ctx.lineTo(width - 50, height - 50);
+            ctx.stroke();
+
+            // Draw labels
+            ctx.font = '12px Arial';
+            ctx.fillStyle = 'black';
+            ctx.textAlign = 'center';
+            ctx.fillText('Year', width / 2, height - 20);
+            ctx.save();
+            ctx.translate(20, height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(config.yAxisLabel, 0, 0);
+            ctx.restore();
+
+            // Draw title
+            ctx.font = '16px Arial';
+            ctx.fillText(config.title, width / 2, 30);
+
+            // Draw data
+            config.datasets.forEach((dataset, index) => {
+                ctx.beginPath();
+                ctx.strokeStyle = dataset.color;
+                data.forEach((d, i) => {
+                    const x = 50 + (i / (data.length - 1)) * (width - 100);
+                    const y = height - 50 - (d[dataset.dataKey] / maxValue) * (height - 100);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+
+                // Draw legend
+                ctx.fillStyle = dataset.color;
+                ctx.fillRect(width - 150, 50 + index * 20, 15, 15);
+                ctx.fillStyle = 'black';
+                ctx.textAlign = 'left';
+                ctx.fillText(dataset.label, width - 130, 62 + index * 20);
+            });
+        }
+
+        function calculateAndDisplay() {
+            const initialCorpus = parseFloat(document.getElementById('initialCorpus').value);
+            const annualInvestmentReturn = parseFloat(document.getElementById('annualInvestmentReturn').value) / 100;
+            const annualBankInterest = parseFloat(document.getElementById('annualBankInterest').value) / 100;
+            const monthlyWithdrawal = parseFloat(document.getElementById('monthlyWithdrawal').value);
+            const years = parseInt(document.getElementById('years').value);
+            const annualInflation = parseFloat(document.getElementById('annualInflation').value) / 100;
+
+            if ([initialCorpus, annualInvestmentReturn, annualBankInterest, monthlyWithdrawal, years, annualInflation].some(isNaN)) {
+                alert('Please enter valid numbers for all fields.');
+                return;
+            }
+
+            const { data, lastingYears, totalBankInterest } = calculateProjection(initialCorpus, annualInvestmentReturn, annualBankInterest, monthlyWithdrawal, years, annualInflation);
+
+            const resultsElement = document.getElementById('results');
+            const bankEarningsElement = document.getElementById('bankEarnings');
+            const finalCorpus = data[data.length - 1].corpus;
+            const finalMonthlyWithdrawal = data[data.length - 1].monthlyWithdrawal;
+
+            let resultsHTML = `
+                <h2>Results</h2>
+                <p><strong>Corpus Longevity:</strong> ${lastingYears < years ? `Approximately ${lastingYears} years` : `Entire projection period of ${years} years and beyond`}</p>
+                <p><strong>Final Corpus Value:</strong> ${formatCurrency(finalCorpus)}</p>
+                <p><strong>Final Monthly Withdrawal:</strong> ${formatCurrency(finalMonthlyWithdrawal)}</p>
+                <h3>Projection Table</h3>
+                <table>
+                    <tr>
+                        <th>Year</th>
+                        <th>Corpus</th>
+                        <th>Monthly Withdrawal</th>
+                        <th>Annual Withdrawal</th>
+                        <th>Investment Return</th>
+                        <th>Bank Interest</th>
+                        <th>Total Return</th>
+                    </tr>
+            `;
+
+            data.forEach(row => {
+                resultsHTML += `
+                    <tr>
+                        <td>${row.year}</td>
+                        <td>${formatCurrency(row.corpus)}</td>
+                        <td>${formatCurrency(row.monthlyWithdrawal)}</td>
+                        <td>${formatCurrency(row.annualWithdrawal)}</td>
+                        <td>${formatCurrency(row.investmentReturn)}</td>
+                        <td>${formatCurrency(row.bankInterest)}</td>
+                        <td>${formatCurrency(row.totalReturn)}</td>
+                    </tr>
+                `;
+            });
+
+            resultsHTML += '</table>';
+
+            if (lastingYears < years) {
+                resultsHTML += `<p><strong>Note:</strong> The corpus is depleted before the end of the projection period.</p>`;
+            }
+
+            resultsElement.innerHTML = resultsHTML;
+
+            let bankEarningsHTML = `
+                <h2>Bank Earnings Details</h2>
+                <p><strong>Total Bank Interest Earned:</strong> ${formatCurrency(totalBankInterest)}</p>
+                <p><strong>Average Annual Bank Interest:</strong> ${formatCurrency(totalBankInterest / years)}</p>
+                <h3>Bank Interest Breakdown</h3>
+                <table>
+                    <tr>
+                        <th>Year</th>
+                        <th>Annual Bank Interest</th>
+                        <th>Cumulative Bank Interest</th>
+                    </tr>
+            `;
+
+            data.forEach(row => {
+                bankEarningsHTML += `
+                    <tr>
+                        <td>${row.year}</td>
+                        <td>${formatCurrency(row.bankInterest)}</td>
+                        <td>${formatCurrency(row.cumulativeBankInterest)}</td>
+                    </tr>
+                `;
+            });
+
+            bankEarningsHTML += '</table>';
+
+            bankEarningsElement.innerHTML = bankEarningsHTML;
+
+            // Draw charts
+            drawChart('corpusChart', data, {
+                title: 'Corpus Growth Over Time',
+                yAxisLabel: 'Corpus Value (₹)',
+                datasets: [{
+                    label: 'Corpus',
+                    dataKey: 'corpus',
+                    color: 'blue'
+                }]
+            });
+
+            drawChart('bankEarningsChart', data, {
+                title: 'Bank Earnings Over Time',
+                yAxisLabel: 'Bank Interest (₹)',
+                datasets: [
+                    {
+                        label: 'Annual Bank Interest',
+                        dataKey: 'bankInterest',
+                        color: 'green'
+                    },
+                    {
+                        label: 'Cumulative Bank Interest',
+                        dataKey: 'cumulativeBankInterest',
+                        color: 'purple'
+                    }
+                ]
+            });
+        }
+
+        // Initial calculation on page load
+        document.addEventListener('DOMContentLoaded', calculateAndDisplay);
+    </script>
+</body>
+</html>
